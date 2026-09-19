@@ -5,3 +5,9 @@ coverage/
 .runtime/
 *.log
 artifacts/
+release-artifacts/
+__pycache__/
+*.pyc
+*.pem
+*.key
+!.release/updater-public-key.pem

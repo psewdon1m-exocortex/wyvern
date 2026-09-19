@@ -58,10 +58,26 @@ export class Kernel {
           }
         }
         const generation = hash(canonical({ register: complete.register_revision, revisions }));
-        return { config, credentials, generation, register_revision: complete.register_revision };
+        return { config, credentials, generation, register_revision: complete.register_revision, config_revision: complete.values[CONFIG_KEY].volt_revision };
       } catch (error) {
         if (error.code !== "configuration_conflict" || attempt === 2) throw error;
       }
+    }
+  }
+  async changeBindings(instance, client, bindings, expectedRevision, requestId) {
+    const signal = AbortSignal.timeout(15000);
+    try {
+      const response = await this.fetch(this.origin + "/api/v1/wyvern/" + instance + "/mutations", {
+        method: "POST", redirect: "error", signal, headers: { Authorization: "Bearer " + await this.token(), "Content-Type": "application/json" },
+        body: JSON.stringify({ operation: "bind", client_id: client, bindings, expected_revision: expectedRevision, request_id: requestId }),
+      });
+      await readBody(response.body, 524288, signal);
+      if (response.status === 409) fault("configuration_conflict", 409);
+      if (response.status === 400 || response.status === 403) fault("permission_denied", 403);
+      if (!response.ok) fault("kernel_unavailable", 503);
+    } catch (error) {
+      if (["configuration_conflict", "permission_denied"].includes(error.code)) throw error;
+      fault("kernel_unavailable", 503);
     }
   }
 }

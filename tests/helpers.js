@@ -31,11 +31,12 @@ export async function close(server) {
   server.closeAllConnections?.();
   if (server.listening) await new Promise(resolve => server.close(resolve));
 }
-export async function fixture(t, { provider, mutate, clock } = {}) {
+export async function fixture(t, { provider, mutate, clock, rawProvider = false } = {}) {
   const calls = [], resolveCalls = [], events = [];
   const google = http.createServer(async (req, res) => {
     const chunks = []; for await (const chunk of req) chunks.push(chunk);
-    const body = JSON.parse(Buffer.concat(chunks));
+    const bytes = Buffer.concat(chunks);
+    const body = rawProvider && !req.headers["content-type"]?.startsWith("application/json") ? bytes : JSON.parse(bytes);
     calls.push({ url: req.url, key: req.headers["x-goog-api-key"], body });
     if (provider) return provider(req, res, body);
     if (req.url.endsWith(":countTokens")) return res.end(JSON.stringify({ totalTokens: 10 }));

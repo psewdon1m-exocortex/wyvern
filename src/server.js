@@ -13,7 +13,7 @@ async function event(res, type, data, signal) {
   if (!res.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`)) await once(res, "drain", { signal });
 }
 export function createServer(runtime, { admin = false } = {}) {
-  const server = http.createServer({ maxHeaderSize: 8192, headersTimeout: 10000, requestTimeout: 30000 }, async (req, res) => {
+  const server = http.createServer({ maxHeaderSize: 8192, headersTimeout: 10000, requestTimeout: 300000 }, async (req, res) => {
     let requestId = "req_" + randomUUID(), operation;
     const cancelled = new AbortController();
     req.on("aborted", () => cancelled.abort());
@@ -37,6 +37,25 @@ export function createServer(runtime, { admin = false } = {}) {
       const authorization = req.headers.authorization;
       const client = runtime.authenticate(typeof authorization === "string" && authorization.startsWith("Bearer ") ? authorization.slice(7) : "");
       if (req.url === "/v1/client" && req.method === "GET") return json(res, 200, runtime.clientStatus(client));
+      if (req.url === "/v1/media" && req.method === "POST") {
+        if (req.headers["content-encoding"] || !/^\d+$/.test(req.headers["content-length"] ?? "")) fault("invalid_request");
+        const selection = {};
+        for (const name of ["function", "adapter_id", "profile"]) { const value = req.headers["x-wyvern-" + name.replace("_", "-")]; if (value !== undefined) selection[name] = value; }
+        operation = runtime.prepareMedia(client, selection, cancelled.signal);
+        const result = await runtime.uploadMedia(operation, req, req.headers["content-type"], Number(req.headers["content-length"]));
+        operation.release("success"); return json(res, 201, result);
+      }
+      if (/^\/v1\/media\/media_[a-f0-9-]{36}$/.test(req.url) && ["GET", "DELETE"].includes(req.method)) {
+        const id = req.url.split("/").at(-1);
+        operation = runtime.prepareMedia(client, runtime.mediaSelection(client, id), cancelled.signal);
+        const result = await runtime.inspectMedia(operation, id, req.method === "DELETE");
+        operation.release("success"); return json(res, 200, result);
+      }
+      if (req.url === "/v1/bindings" && req.method === "POST") {
+        if (req.headers["content-type"]?.split(";")[0] !== "application/json") fault("unsupported_media_type", 415);
+        const input = parseJSON((await readBody(req, 16384, AbortSignal.any([cancelled.signal, AbortSignal.timeout(10000)]))).toString("utf8"));
+        return json(res, 200, await runtime.changeBindings(client, input));
+      }
       const countOnly = req.url === "/v1/count-tokens";
       if ((!countOnly && req.url !== "/v1/generate") || req.method !== "POST") fault("not_found", 404);
       if (req.headers["content-type"]?.split(";")[0] !== "application/json" || req.headers["content-encoding"]) fault("unsupported_media_type", 415);

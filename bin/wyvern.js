@@ -12,6 +12,7 @@ import { validateConfig } from "../src/config.js";
 import { fields, readBody } from "../src/util.js";
 import { publicError } from "../src/errors.js";
 import { Audit } from "../src/audit.js";
+import { Media } from "../src/media.js";
 
 export async function listenLocal(runtime, clientSocket, adminSocket) {
   if (!path.isAbsolute(clientSocket) || !path.isAbsolute(adminSocket) || path.dirname(clientSocket) === path.dirname(adminSocket)) throw new Error("invalid_socket_boundary");
@@ -57,7 +58,8 @@ async function serve() {
     : new Kernel({ origin: bootstrap.kernel_origin, token, configKey: bootstrap.config_key });
   const sink = event => { if (process.stdout.writableLength < 65536) process.stdout.write(JSON.stringify(event) + "\n"); };
   const audit = new Audit(process.env.WYVERN_AUDIT_DIR || "/var/lib/wyvern/audit");
-  const runtime = new Runtime({ kernel, sink, audit });
+  const runtime = new Runtime({ kernel, sink, audit, media: new Media({ filename: process.env.WYVERN_MEDIA_FILE || "/var/lib/wyvern/media.json" }) });
+  try { await fs.stat("/etc/wyvern/maintenance"); runtime.drain(true); } catch (error) { if (error.code !== "ENOENT") throw error; }
   await runtime.start();
   const close = await listenLocal(runtime, clientSocket, adminSocket);
   let stopping = false;

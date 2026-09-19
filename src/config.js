@@ -9,7 +9,7 @@ export const LIMITS = Object.freeze({ max_concurrent: 16, request_timeout_ms: 12
 const RANGES = { max_concurrent: [1, 256], request_timeout_ms: [100, 300000],
   max_body_bytes: [1024, 4194304], max_response_bytes: [1024, 4194304],
   max_auth_stale_ms: [1000, 3600000], reload_interval_ms: [1000, 300000], idle_stream_timeout_ms: [100, 120000] };
-const CAPABILITIES = ["text", "streaming", "structured_output", "token_count"];
+export const CAPABILITIES = ["text", "streaming", "structured_output", "token_count", "image", "pdf", "audio", "video", "youtube"];
 
 export function validateConfig(input, { allowLoopback = false } = {}) {
   try {
@@ -51,17 +51,24 @@ export function validateConfig(input, { allowLoopback = false } = {}) {
     const clients = Object.create(null);
     const hashes = new Set();
     for (const [id, client] of Object.entries(input.clients)) {
-      fields(client, ["token_sha256", "allowed_adapters", "bindings", "enabled"], ["token_sha256", "allowed_adapters", "bindings", "enabled"]);
+      fields(client, ["token_sha256", "allowed_adapters", "bindings", "enabled", "requirements"], ["token_sha256", "allowed_adapters", "bindings", "enabled"]);
       if (!ID.test(id) || !HASH.test(client.token_sha256) || hashes.has(client.token_sha256) || typeof client.enabled !== "boolean" ||
           !Array.isArray(client.allowed_adapters) || client.allowed_adapters.length > 16 ||
           new Set(client.allowed_adapters).size !== client.allowed_adapters.length ||
           client.allowed_adapters.some(key => !Object.hasOwn(adapters, key)) ||
           !object(client.bindings) || Object.keys(client.bindings).length > 32) fault("configuration_invalid", 503);
       hashes.add(client.token_sha256);
+      const requirements = client.requirements ?? {};
+      if (!object(requirements) || Object.keys(requirements).length > 32) fault("configuration_invalid", 503);
+      for (const [feature, capabilities] of Object.entries(requirements)) {
+        if (!ID.test(feature) || !Array.isArray(capabilities) || capabilities.length > CAPABILITIES.length || capabilities.some(cap => !CAPABILITIES.includes(cap)) || new Set(capabilities).size !== capabilities.length) fault("configuration_invalid", 503);
+      }
       for (const [feature, binding] of Object.entries(client.bindings)) {
         fields(binding, ["adapter_id", "profile"], ["adapter_id", "profile"]);
         if (!ID.test(feature) || !client.allowed_adapters.includes(binding.adapter_id) ||
-            !Object.hasOwn(adapters[binding.adapter_id].profiles, binding.profile)) fault("configuration_invalid", 503);
+            !Object.hasOwn(adapters[binding.adapter_id].profiles, binding.profile) ||
+            Object.keys(requirements).length && !Object.hasOwn(requirements, feature) ||
+            (requirements[feature] ?? []).some(cap => !adapters[binding.adapter_id].profiles[binding.profile].capabilities.includes(cap))) fault("configuration_invalid", 503);
       }
       clients[id] = client;
     }

@@ -1,6 +1,7 @@
 import Ajv from "ajv";
 import { fault } from "./errors.js";
 import { fields, object, integer, ID } from "./util.js";
+import { MEDIA_ID } from "./media.js";
 
 // Bounded structural JSON Schema subset. Regex, remote references and recursion
 // are intentionally unsupported; no network or executable schema vocabulary.
@@ -41,7 +42,25 @@ export function validateRequest(input, profile, { countOnly = false } = {}) {
   for (let index = 0; index < input.messages.length; index++) {
     const message = input.messages[index];
     fields(message, ["role", "content"], ["role", "content"]);
-    if (!["system", "user", "assistant"].includes(message.role) || typeof message.content !== "string" || !message.content.length) fault("invalid_request");
+    if (!["system", "user", "assistant"].includes(message.role)) fault("invalid_request");
+    if (typeof message.content === "string") { if (!message.content.length) fault("invalid_request"); }
+    else {
+      if (message.role !== "user" || !Array.isArray(message.content) || !message.content.length || message.content.length > 32) fault("invalid_request");
+      for (const part of message.content) {
+        if (part?.type === "text") { fields(part, ["type", "text"], ["type", "text"]); if (typeof part.text !== "string" || !part.text.length) fault("invalid_request"); continue; }
+        fields(part, ["type", "media_id", "url", "video"], ["type"]);
+        if (part.type === "media") { if (!MEDIA_ID.test(part.media_id) || part.url !== undefined) fault("invalid_request"); }
+        else if (part.type === "youtube") {
+          if (!/^https:\/\/www\.youtube\.com\/watch\?v=[A-Za-z0-9_-]{11}$/.test(part.url) || part.media_id !== undefined) fault("invalid_request");
+          if (!profile.capabilities.includes("youtube")) fault("capability_not_supported", 422);
+        } else fault("invalid_request");
+        if (part.video !== undefined) {
+          fields(part.video, ["start_seconds", "end_seconds", "fps"]);
+          const { start_seconds: start = 0, end_seconds: end = 86400, fps = 1 } = part.video;
+          if (!Number.isFinite(start) || !Number.isFinite(end) || !Number.isFinite(fps) || start < 0 || end <= start || end > 86400 || fps < 0.1 || fps > 5) fault("invalid_request");
+        }
+      }
+    }
     if (message.role === "system") {
       if (index !== 0 || systemSeen) fault("invalid_request");
       systemSeen = true;
