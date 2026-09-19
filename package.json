@@ -1,0 +1,14 @@
+{
+  "name": "@exocortex/wyvern",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24.14.0" },
+  "bin": { "wyvern": "bin/wyvern.js" },
+  "scripts": {
+    "start": "node bin/wyvern.js serve",
+    "test": "node --test tests/*.test.js",
+    "check": "node scripts/check.mjs && npm test"
+  },
+  "dependencies": { "ajv": "8.20.0" }
+}

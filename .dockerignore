@@ -1,0 +1,11 @@
+*
+!package.json
+!package-lock.json
+!src/
+!src/**
+!bin/
+!bin/**
+!tests/
+!tests/**
+!scripts/
+!scripts/**
