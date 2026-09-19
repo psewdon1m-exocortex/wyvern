@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { fault } from "./errors.js";
+import { logEvent } from "./observability.js";
 
 export const ID = /^[a-z][a-z0-9_-]{0,63}$/;
 export const KEY = /^[a-z][a-z0-9_-]*(?:\.[a-z0-9_-]+)*$/;
@@ -66,7 +67,5 @@ export async function readBody(stream, limit, signal) {
 
 // Never serializes arbitrary upstream errors, payloads, headers or caller metadata.
 export function telemetry(sink, event) {
-  const allowed = ["event", "request_id", "client_id", "adapter_id", "profile", "generation", "attempt", "status", "duration_ms", "input_tokens", "output_tokens"];
-  const safe = Object.fromEntries(Object.entries(event).filter(([key]) => allowed.includes(key)));
-  try { sink?.(safe); } catch { /* telemetry cannot fail a generation */ }
+  try { sink?.(logEvent(event)); } catch { /* telemetry cannot fail a generation */ }
 }

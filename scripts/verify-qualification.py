@@ -5,6 +5,9 @@ import json
 from pathlib import Path
 import re
 import urllib.request
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import release_contract as contract
 
 SHA = re.compile(r'[a-f0-9]{40}')
 DIGEST = re.compile(r'[a-f0-9]{64}')
@@ -46,14 +49,16 @@ def read_json(path):
     return json.loads(path.read_bytes(), object_pairs_hook=unique)
 
 
-def verify(root, revision, tag, catalog, *, final=False):
+def verify(root, revision, tag, catalog, *, candidate, policy, final=False):
     require(SHA.fullmatch(revision) and re.fullmatch(r'wyvern-v\d+\.\d+\.\d+', tag), 'Invalid release identity')
     report = read_json(safe_file(root, 'known-problems-report.json'))
+    require(report.get('candidate_sha256') == candidate and DIGEST.fullmatch(candidate), 'Evidence belongs to another candidate')
     require(report.get('schema_version') == 1 and report.get('service') == 'wyvern'
             and report.get('revision') == revision and report.get('release_tag') == tag, 'Stale qualification identity')
     require(report.get('catalog_repository') == 'https://github.com/psewdon1m-exocortex/general'
             and report.get('catalog_path') == CATALOG and SHA.fullmatch(report.get('catalog_revision', ''))
-            and report.get('catalog_sha256') == digest(catalog), 'Unpinned or changed policy catalog')
+            and report.get('catalog_sha256') == digest(catalog) == policy['sha256']
+            and report.get('catalog_revision') == policy['revision'], 'Unpinned, stale or changed policy catalog')
     identifiers = []
     for line in catalog.decode('utf-8').splitlines():
         if line.startswith('| **CAT-NN** |'):
@@ -77,8 +82,8 @@ def verify(root, revision, tag, catalog, *, final=False):
                     and isinstance(row.get('reason'), str) and len(row['reason'].strip()) >= 50
                     and isinstance(paths, list) and paths and all(isinstance(path, str) and path.strip() for path in paths), name + ': unexplained N/A')
             for path in paths:
-                candidate = (SOURCE_ROOT / path).resolve()
-                require(candidate.is_relative_to(SOURCE_ROOT) and candidate.exists(), name + ': uninspected source path')
+                inspected = (SOURCE_ROOT / path).resolve()
+                require(inspected.is_relative_to(SOURCE_ROOT) and inspected.exists(), name + ': uninspected source path')
             require(name not in FINAL_ONLY, name + ': signed artifact checks always apply')
             continue
         if not final and status == 'DEFERRED' and name in FINAL_ONLY:
@@ -93,6 +98,7 @@ def verify(root, revision, tag, catalog, *, final=False):
             require(digest(path.read_bytes()) == reference['sha256'], 'Changed evidence')
             proof = read_json(path)
             require(proof.get('schema') == 'wyvern.verification.v1' and proof.get('revision') == revision
+                    and proof.get('candidate_sha256') == candidate
                     and proof.get('catalog_sha256') == report['catalog_sha256']
                     and proof.get('status') == 'PASS' and name in proof.get('problem_ids', [])
                     and isinstance(proof.get('command'), str) and proof['command'].strip()
@@ -117,9 +123,14 @@ if __name__ == '__main__':
     parser.add_argument('--bundle', required=True, type=Path)
     parser.add_argument('--revision', required=True)
     parser.add_argument('--tag', required=True)
+    parser.add_argument('--assets', required=True, type=Path)
     args = parser.parse_args()
     report = read_json(safe_file(args.bundle, 'known-problems-report.json'))
-    catalog = fetch_catalog(report)
-    verify(args.bundle, args.revision, args.tag, catalog)
+    policy = contract.policy()
+    catalog = contract.catalog_bytes(policy)
+    contract.lint_catalog(catalog, policy)
+    candidate, candidate_sha256 = contract.verify_candidate(args.assets, args.revision, policy)
+    require(args.tag == 'wyvern-v' + candidate['version'], 'Candidate version differs from tag')
+    verify(args.bundle, args.revision, args.tag, catalog, candidate=candidate_sha256, policy=policy)
     (args.bundle / 'catalog.md').write_bytes(catalog)
     print('PASS: exact-source Part 12 pre-signing evidence; only final asset checks may be deferred')

@@ -1,0 +1,94 @@
+name: Wyvern immutable candidate
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  attestations: write
+concurrency:
+  group: wyvern-candidate-${{ github.sha }}
+  cancel-in-progress: false
+jobs:
+  candidate:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24.21.0'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: python3 scripts/pre-push.py --report "$RUNNER_TEMP/pre-push.json"
+      - name: Fetch verified dependency without signing credentials
+        run: python3 scripts/fetch-updater.py --output "$RUNNER_TEMP/updater"
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        id: image
+        with:
+          context: .
+          target: runtime
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/${{ github.repository }}:candidate-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          sbom: true
+          provenance: mode=max
+      - name: Verify exact pushed image and assemble unsigned candidate
+        env:
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY,,}@$IMAGE_DIGEST"
+          docker pull "$image"
+          node scripts/smoke-container.mjs "$image"
+          python3 scripts/build-release.py --output "$RUNNER_TEMP/candidate" --updater-bundle "$RUNNER_TEMP/updater" --public-key "$RUNNER_TEMP/updater/release-trust/wyvern.pem" --source-sha "$GITHUB_SHA" --repository "$GITHUB_REPOSITORY" --image "$image"
+          docker save "$image" -o "$RUNNER_TEMP/image.tar"
+          python3 scripts/security-scan.py --assets "$RUNNER_TEMP/candidate" --image-archive "$RUNNER_TEMP/image.tar"
+          scanner="$(cat .release/trivy.image)"
+          docker run --rm -v "$RUNNER_TEMP:/scan" "$scanner" image --input /scan/image.tar --scanners vuln,secret --severity HIGH,CRITICAL --exit-code 1 --no-progress --format json --output /scan/image-scan.json
+          docker run --rm -v "$RUNNER_TEMP:/scan" "$scanner" image --input /scan/image.tar --format spdx-json --output /scan/candidate/sbom.spdx.json
+      - uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a
+        id: provenance
+        with:
+          subject-name: ghcr.io/${{ github.repository }}
+          subject-digest: ${{ steps.image.outputs.digest }}
+          push-to-registry: true
+      - uses: actions/attest-sbom@4651f806c01d8637787e274ac3bdf724ef169f34
+        id: sbom
+        with:
+          subject-name: ghcr.io/${{ github.repository }}
+          subject-digest: ${{ steps.image.outputs.digest }}
+          sbom-path: ${{ runner.temp }}/candidate/sbom.spdx.json
+          push-to-registry: true
+      - name: Seal complete candidate inventory
+        env:
+          PROVENANCE: ${{ steps.provenance.outputs.bundle-path }}
+          SBOM_ATTESTATION: ${{ steps.sbom.outputs.bundle-path }}
+        run: |
+          cp "$PROVENANCE" "$RUNNER_TEMP/candidate/image-provenance.json"
+          cp "$SBOM_ATTESTATION" "$RUNNER_TEMP/candidate/image-sbom-attestation.json"
+          python3 scripts/release_contract.py create --assets "$RUNNER_TEMP/candidate" --revision "$GITHUB_SHA"
+          python3 scripts/security-scan.py --assets "$RUNNER_TEMP/candidate"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: wyvern-candidate-${{ github.sha }}
+          path: ${{ runner.temp }}/candidate/
+          if-no-files-found: error
+          retention-days: 90
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: wyvern-candidate-checks-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/pre-push.json
+            ${{ runner.temp }}/pre-push-logs/
+            ${{ runner.temp }}/image-scan.json
+          if-no-files-found: error
+          retention-days: 90

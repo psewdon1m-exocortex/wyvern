@@ -11,110 +11,118 @@ concurrency:
 jobs:
   qualify:
     runs-on: ubuntu-latest
-    outputs:
-      image_id: ${{ steps.image.outputs.id }}
+    permissions:
+      contents: read
+      actions: read
+      packages: read
+      attestations: read
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
-          node-version: '24.14.0'
-          cache: npm
-      - run: npm ci --ignore-scripts
-      - run: npm run check
-      - run: python3 -m unittest discover -s packaging -p 'test_*.py'
-      - run: docker build --target verification -t wyvern-verification .
-      - run: docker build -t wyvern-release-test .
-      - run: node scripts/smoke-container.mjs wyvern-release-test
-      - name: Verify tag and qualification run identity
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24.21.0'
+      - name: Require successful producers on the exact protected source
         env:
           GH_TOKEN: ${{ github.token }}
+          CANDIDATE_RUN_ID: ${{ vars.WYVERN_CANDIDATE_RUN_ID }}
           QUALIFICATION_RUN_ID: ${{ vars.WYVERN_QUALIFICATION_RUN_ID }}
         run: |
           set -euo pipefail
           test "$GITHUB_REF_NAME" = "wyvern-v$(node -p "require('./package.json').version")"
           git fetch --no-tags origin main
           test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
-          test -n "$QUALIFICATION_RUN_ID" || { echo 'Set WYVERN_QUALIFICATION_RUN_ID to the successful exact-source Part 12 qualification run.'; exit 1; }
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$QUALIFICATION_RUN_ID" > "$RUNNER_TEMP/qualification-run.json"
-          python3 -c 'import json,os; r=json.load(open(os.environ["RUNNER_TEMP"]+"/qualification-run.json")); assert r["head_sha"]==os.environ["GITHUB_SHA"] and r["conclusion"]=="success" and r["repository"]["full_name"]==os.environ["GITHUB_REPOSITORY"]'
-      - uses: actions/download-artifact@v4
+          python3 scripts/verify-run.py candidate "$CANDIDATE_RUN_ID"
+          python3 scripts/verify-run.py qualification "$QUALIFICATION_RUN_ID"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: wyvern-candidate-${{ github.sha }}
+          run-id: ${{ vars.WYVERN_CANDIDATE_RUN_ID }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/qualified/assets
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: wyvern-qualification-${{ github.sha }}
           run-id: ${{ vars.WYVERN_QUALIFICATION_RUN_ID }}
           github-token: ${{ github.token }}
-          path: ${{ runner.temp }}/qualification
-      - name: Enforce immutable Part 12 evidence before signing access
-        run: python3 scripts/verify-qualification.py --bundle "$RUNNER_TEMP/qualification" --revision "$GITHUB_SHA" --tag "$GITHUB_REF_NAME"
-      - name: Preserve the tested image without rebuilding
-        id: image
+          path: ${{ runner.temp }}/qualified/qualification
+      - name: Verify candidate, current policy and exact artifact evidence
+        run: python3 scripts/verify-qualification.py --assets "$RUNNER_TEMP/qualified/assets" --bundle "$RUNNER_TEMP/qualified/qualification" --revision "$GITHUB_SHA" --tag "$GITHUB_REF_NAME"
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Verify trusted image provenance and SBOM before signing
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          echo "id=$(docker image inspect wyvern-release-test --format '{{.Id}}')" >> "$GITHUB_OUTPUT"
-          docker save wyvern-release-test -o "$RUNNER_TEMP/wyvern-image.tar"
-      - uses: actions/upload-artifact@v4
+          set -euo pipefail
+          assets="$RUNNER_TEMP/qualified/assets"
+          image="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["image"])' "$assets/candidate.json")"
+          gh attestation verify "oci://$image" --bundle "$assets/image-provenance.json" --repo "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/candidate.yml" --source-digest "$GITHUB_SHA" --deny-self-hosted-runners
+          gh attestation verify "oci://$image" --bundle "$assets/image-sbom-attestation.json" --repo "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/candidate.yml" --source-digest "$GITHUB_SHA" --predicate-type https://spdx.dev/Document --deny-self-hosted-runners
+          docker pull "$image"
+          node scripts/smoke-container.mjs "$image"
+          docker save "$image" -o "$RUNNER_TEMP/image.tar"
+          python3 scripts/security-scan.py --assets "$RUNNER_TEMP/qualified" --image-archive "$RUNNER_TEMP/image.tar"
+          docker run --rm -v "$RUNNER_TEMP:/scan" "$(cat .release/trivy.image)" image --input /scan/image.tar --scanners vuln,secret --severity HIGH,CRITICAL --exit-code 1 --no-progress --format json --output /scan/image-scan.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: wyvern-qualified-${{ github.sha }}
-          path: |
-            ${{ runner.temp }}/wyvern-image.tar
-            ${{ runner.temp }}/qualification/
-          retention-days: 30
-  publish:
+          path: ${{ runner.temp }}/qualified/
+          if-no-files-found: error
+          retention-days: 90
+  sign:
     needs: qualify
     runs-on: ubuntu-latest
     environment: release
     permissions:
-      contents: write
-      packages: write
+      contents: read
       actions: read
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
-          node-version: '24.14.0'
-      - name: Verify version and dependency trust
-        env:
-          SIGNING_KEY: ${{ secrets.WYVERN_RELEASE_PRIVATE_KEY }}
-        run: |
-          test "$GITHUB_REF_NAME" = "wyvern-v$(node -p "require('./package.json').version")"
-          test -n "$SIGNING_KEY"
-          umask 077
-          printf '%s\n' "$SIGNING_KEY" > "$RUNNER_TEMP/wyvern.key"
-          openssl pkey -in "$RUNNER_TEMP/wyvern.key" -pubout -out "$RUNNER_TEMP/wyvern.pem"
-          python3 scripts/fetch-updater.py --output "$RUNNER_TEMP/updater"
-          cmp "$RUNNER_TEMP/wyvern.pem" "$RUNNER_TEMP/updater/release-trust/wyvern.pem"
-      - uses: actions/download-artifact@v4
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24.21.0'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: wyvern-qualified-${{ github.sha }}
           path: ${{ runner.temp }}/qualified
-      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Publish the exact tested image
-        id: image
+      - name: Sign in a single process without publication permissions
         env:
-          EXPECTED_IMAGE_ID: ${{ needs.qualify.outputs.image_id }}
+          WYVERN_SIGNING_KEY: ${{ secrets.WYVERN_RELEASE_PRIVATE_KEY }}
+        run: node scripts/sign-ephemeral.mjs "$RUNNER_TEMP/qualified/assets/wyvern-release.json" "$RUNNER_TEMP/qualified/assets/wyvern.pem"
+      - name: Check signed outputs after the secret process has exited
         run: |
-          set -euo pipefail
-          docker load -i "$RUNNER_TEMP/qualified/wyvern-image.tar"
-          test "$(docker image inspect wyvern-release-test --format '{{.Id}}')" = "$EXPECTED_IMAGE_ID"
-          image="ghcr.io/${GITHUB_REPOSITORY,,}:$GITHUB_REF_NAME"
-          docker tag wyvern-release-test "$image"
-          docker push "$image"
-          reference="$(docker image inspect "$image" --format '{{index .RepoDigests 0}}')"
-          echo "digest=${reference##*@}" >> "$GITHUB_OUTPUT"
-      - name: Assemble, sign, publish exact manifest
+          python3 scripts/verify-signed.py "$RUNNER_TEMP/qualified/assets"
+          python3 scripts/security-scan.py --assets "$RUNNER_TEMP/qualified"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: wyvern-signed-${{ github.sha }}
+          path: ${{ runner.temp }}/qualified/
+          if-no-files-found: error
+          retention-days: 90
+  publish:
+    needs: sign
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: wyvern-signed-${{ github.sha }}
+          path: ${{ runner.temp }}/qualified
+      - name: Verify, stage as prerelease, then promote only a complete qualification
         env:
-          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          python3 scripts/build-release.py --output "$RUNNER_TEMP/release" --updater-bundle "$RUNNER_TEMP/updater" --public-key "$RUNNER_TEMP/wyvern.pem" --source-sha "$GITHUB_SHA" --repository "$GITHUB_REPOSITORY" --image "ghcr.io/$GITHUB_REPOSITORY@$IMAGE_DIGEST"
-          node scripts/sign-release.mjs "$RUNNER_TEMP/release/wyvern-release.json" "$RUNNER_TEMP/wyvern.key"
-          gh release create "$GITHUB_REF_NAME" "$RUNNER_TEMP/release/"* --verify-tag --latest=false --title "Wyvern $GITHUB_REF_NAME" --notes-file docs/release-notes.md
-          python3 scripts/verify-published.py --assets "$RUNNER_TEMP/release" --bundle "$RUNNER_TEMP/qualified/qualification" --public-key "$RUNNER_TEMP/wyvern.pem" --revision "$GITHUB_SHA" --tag "$GITHUB_REF_NAME" --repository "$GITHUB_REPOSITORY"
-          tar -czf "$RUNNER_TEMP/qualification-evidence.tar.gz" -C "$RUNNER_TEMP/qualified/qualification" .
-          gh release upload "$GITHUB_REF_NAME" "$RUNNER_TEMP/qualified/qualification/known-problems-report.json" "$RUNNER_TEMP/qualification-evidence.tar.gz"
-          gh release edit "$GITHUB_REF_NAME" --latest
-      - name: Remove ephemeral signing material
-        if: always()
-        run: rm -f -- "$RUNNER_TEMP/wyvern.key"
+          python3 scripts/verify-signed.py "$RUNNER_TEMP/qualified/assets"
+          python3 scripts/publish-release.py --assets "$RUNNER_TEMP/qualified/assets" --bundle "$RUNNER_TEMP/qualified/qualification" --public-key "$RUNNER_TEMP/qualified/assets/wyvern.pem" --revision "$GITHUB_SHA" --tag "$GITHUB_REF_NAME" --repository "$GITHUB_REPOSITORY"

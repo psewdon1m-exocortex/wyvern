@@ -5,11 +5,12 @@ import { randomUUID } from "node:crypto";
 
 const image = process.argv[2];
 if (!image || image.startsWith("-") || !/^[a-zA-Z0-9_./:@-]+$/.test(image)) throw new Error("Pass the exact local image reference");
-const name = "wyvern-smoke-" + randomUUID();
+const name = "wyvern-smoke-" + randomUUID(), logsName = name + "-logs";
 const docker = (...args) => execFileSync("docker", args, { encoding: "utf8", timeout: 30000, stdio: ["ignore", "pipe", "pipe"] });
-let started = false;
+let started = false, logsStarted = false;
 try {
   docker("run", "--detach", "--rm", "--name", name, "--read-only", "--network", "none", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
+    "--log-driver", "json-file", "--log-opt", "max-size=10m", "--log-opt", "max-file=3",
     "--pids-limit", "64", "--memory", "128m",
     "--tmpfs", "/run/wyvern:rw,nosuid,nodev,noexec,size=1m,uid=10001,gid=10001,mode=0750",
     "--tmpfs", "/run/wyvern-admin:rw,nosuid,nodev,noexec,size=1m,uid=10001,gid=10001,mode=0750",
@@ -26,6 +27,20 @@ try {
   docker("exec", name, "node", "--input-type=module", "-e", script);
   const inspection = JSON.parse(docker("inspect", "--format", "{{json .HostConfig}}", name));
   assert.equal(inspection.ReadonlyRootfs, true); assert.equal(inspection.Privileged, false); assert.equal(inspection.NetworkMode, "none");
+  assert.equal(inspection.LogConfig.Type, "json-file");
+  assert.equal(inspection.LogConfig.Config["max-size"], "10m");
+  assert.equal(inspection.LogConfig.Config["max-file"], "3");
+  // Exercise actual daemon rotation, including removal of the oldest records.
+  const flood = "const {once}=require('node:events'); (async()=>{console.log('WYVERN_FIRST_SENTINEL');const line='x'.repeat(1023)+'\\n';for(let i=0;i<45000;i++){if(!process.stdout.write(line))await once(process.stdout,'drain')}console.log('WYVERN_LAST_SENTINEL')})()";
+  docker("run", "--detach", "--name", logsName, "--read-only", "--network", "none", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
+    "--log-driver", "json-file", "--log-opt", "max-size=10m", "--log-opt", "max-file=3", "--memory", "128m", "--pids-limit", "64", "--entrypoint", "node", image, "-e", flood);
+  logsStarted = true;
+  assert.equal(docker("wait", logsName).trim(), "0");
+  const retained = execFileSync("docker", ["logs", logsName], { timeout: 30000, maxBuffer: 32*1024*1024 });
+  assert.ok(retained.length > 10*1024*1024 && retained.length <= 30*1024*1024);
+  assert.equal(retained.includes("WYVERN_FIRST_SENTINEL"), false);
+  assert.equal(retained.includes("WYVERN_LAST_SENTINEL"), true);
   process.stdout.write(JSON.stringify({ schema: "exocortex.wyvern.container-evidence.v1", result: "PASS", image,
-    non_root: true, read_only_root: true, no_network: true, cold_unconfigured: true, separated_admin_socket: true }) + "\n");
-} finally { if (started) docker("stop", "--time", "5", name); }
+    non_root: true, read_only_root: true, no_network: true, cold_unconfigured: true, separated_admin_socket: true,
+    rotated_logging: true, retained_log_bytes: retained.length }) + "\n");
+} finally { if (logsStarted) docker("rm", "--force", logsName); if (started) docker("stop", "--time", "5", name); }

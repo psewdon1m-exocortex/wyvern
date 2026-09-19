@@ -116,6 +116,7 @@ def install(base, encoded_public, version):
         raise ValueError('Bootstrap requires root on Linux')
     if not re.fullmatch(r'https://github.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/releases/download/wyvern-v\d+\.\d+\.\d+', base):
         raise ValueError('Invalid pinned release location')
+    published_release(base, version)
     public = base64.b64decode(encoded_public, validate=True)
     body, signature = fetch(base+'/wyvern-release.json', 65536), fetch(base+'/wyvern-release.json.sig.json', 16384)
     manifest = verify(body, signature, public)
@@ -137,6 +138,15 @@ def install(base, encoded_public, version):
         (stage/'wyvern-release.json').write_bytes(body)
         (stage/'wyvern-release.json.sig.json').write_bytes(signature)
         subprocess.run(['sh', str(stage/'install.sh')], check=True)
+
+
+def published_release(base, version):
+    match = re.fullmatch(r'https://github.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)/releases/download/(wyvern-v\d+\.\d+\.\d+)', base)
+    if not match or match[2] != 'wyvern-v' + version:
+        raise ValueError('Invalid release identity')
+    release = json.loads(fetch('https://api.github.com/repos/' + match[1] + '/releases/tags/' + match[2], 1024**2))
+    if release.get('tag_name') != match[2] or release.get('draft') is not False or release.get('prerelease') is not False:
+        raise ValueError('Wyvern release is not qualified for installation')
 
 
 if __name__ == '__main__':

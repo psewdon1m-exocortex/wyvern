@@ -1,44 +1,75 @@
-# Implementation and qualification — 2026-09-19
+# Implementation and verification — 2026-09-19
 
-Wyvern 0.0.1 implementation is complete in the integration workspace. This is an **unpublished source candidate**, not an assertion of production deployment or live Google qualification.
+Wyvern 0.0.1 is an **unpublished workspace candidate**. Runtime, integrations and
+release tooling are implemented; production deployment and a signed release
+still require the external inputs below. The owner excluded Wyvern web lifecycle
+cards and decorative changes: this component has no own web interface.
 
-## Delivered
+## Delivered scope
 
-- Adapter-first runtime with scoped identities, capabilities and function bindings; Google text, structural JSON, countTokens, normalized SSE and cancellation. One inference attempt; prompts, queues, budgets, embeddings, evidence validation and canonical commits remain in consumers.
-- PDF/image/audio/video uploads and YouTube parts; streaming uploads, bounded quotas, ownership, restart-safe handle ledger, expiry, key-generation checks, pinning and cleanup. No arbitrary provider URL, filesystem mount or caller-supplied provider file URI.
-- Kernel manager/runtime principals; exact-key grants and legacy alias denial. Typed enrollment/publication/binding API, encrypted Volt credentials, nested transactions, CAS and durable last-operation replay. Register and Volt revisions govern snapshot activation; stale authorization fails closed.
-- Updater 0.6.0 source: one host installation, signed manifest/image verification, install-or-reuse, remote import/export, private identities, explicit client rotation, masked TUI forms, grants, runtime drain, update, rollback and interrupted-operation repair. Shared updates require root operator dispatch; service tokens can install/reuse and link their own head.
-- Mastermind and Laboratory use Wyvern, including media. Both have separate Settings cards and compatible functional binding selection. Direct provider SDK/credential dependencies were removed from the migrated clients. Application readiness remains separate from LLM readiness.
-- Consumer installers embed the signed Wyvern manifest and compatible Updater. Standalone bootstrap, dependency verification, deterministic release assembly and a protected release workflow are supplied. Signing requires exact-source Part 12 receipts; the tested image is promoted without rebuilding and final anonymous assets are verified before setting latest.
-- Encrypted host recovery includes manager/runtime/client identities and media metadata. Old archives preserve new Wyvern roots; executable deployment state is re-provisioned by a signed installer. Runtime rollback never restores global Register/Volt state.
+- Adapter-first runtime with scoped clients, capabilities and function bindings;
+  Google text/JSON/countTokens/SSE/cancellation and bounded media transport.
+  Prompts, budgets, domain validation and canonical writes remain in consumers.
+- Kernel/Volt publication, grants, encrypted provider credentials, CAS, durable
+  replay, generation changes and stale-authorization denial.
+- Updater install/reuse, explicit remote links, shared TUI, drain/update/rollback,
+  interrupted-operation repair and encrypted host identity recovery.
+- Mastermind and Laboratory native Wyvern clients, existing Settings binding
+  selection and logical backup of their own non-secret Adapter intent. Restore
+  preserves shared state and blocks conflicting restored selections.
+- Minimal anonymous health, bounded structured diagnostics and security audit;
+  explicit Docker rotation and an isolated size/age/rate-limited systemd journal.
+- One Linux pre-push command with seven-area applicability, route inventory,
+  reviewed Part 12 pin, regressions and source/dependency/image security gates.
+- Separate immutable candidate, qualification, in-memory signing and publication
+  jobs. Exact artifact hashes, image SBOM/provenance and current-policy receipts
+  are checked before signing; anonymous asset/image checks precede promotion.
+  Bootstrap and Updater exclude staged prereleases.
 
-## Recorded checks
+## Checks run for this correction
 
-| Check | Result |
+| Check | Observed result |
 | --- | --- |
-| Wyvern Linux container verification | 32/32 tests, no skips |
-| Bootstrap signature, bounded extraction/download retries, clean-source assembly, qualification/evidence integrity | 11/11 Python tests |
-| Real Wyvern → Kernel → Volt HTTP chain | PASS: publication, replay/conflict, roles, bindings, generation, rotation, legacy denial |
-| Real Mastermind and Laboratory consumer code → Wyvern → synthetic Google | PASS: text/JSON, usage/provenance, media upload/use/delete, key containment |
-| Production runtime container | PASS: UID 10001, read-only root, cold unconfigured diagnostics, separated admin/data sockets |
-| Kernel | 41/41 unit/API tests |
-| Volt | 40/40 tests in Linux, no skips; publication/rollback and POSIX permissions included |
-| Updater | Full Go suite and vet passed; API/component/console/TUI/recovery race checks passed |
-| TUI | Real Linux PTY navigation, resize, masked entry, confirmations, receipts and terminal restoration |
-| Mastermind | 521/521 tests in Linux Worker dependency image; two existing dependency deprecation warnings |
-| Laboratory | 35/35 tests; six synthetic signed-bootstrap/install preparation checks passed |
-| Consumer Settings in browser fixtures | Both cards render identities/readiness, preserve a disabled selection and show CAS conflicts without unhandled errors; checked at desktop and 390px width |
+| Wyvern runtime in Linux container | 38/38, no skips |
+| Packaging, signature, candidate/evidence integrity, publication failure paths | 19/19 Python tests |
+| Mastermind recovery, Wyvern Settings, Gemini/media integration | 52/52 targeted tests; two existing dependency deprecation warnings |
+| Laboratory complete API suite | 38/38, no skips |
+| Updater | Full `go test ./...` and `go vet ./...` passed |
+| Wyvern → real Kernel → real Volt | PASS via `verify-workspace.mjs` |
+| Real Mastermind/Laboratory clients → Wyvern → synthetic provider | PASS; text/JSON, usage, media upload/use/delete, provider-key containment |
+| Runtime container | PASS; UID 10001, read-only root, admin/data separation, cold diagnostics |
+| Docker log rotation | PASS; about 45 MB emitted, oldest marker removed, newest retained, retained output below 30 MiB |
+| Generated systemd unit and journal policy | PASS on systemd 255 in disposable WSL rehearsal; namespace delivery/configuration checked |
+| GitHub workflows | `actionlint` 1.7.7 passed; immutable action checks are in pre-push |
+| Security | Source/all-layer secret scans, npm audit and Trivy HIGH/CRITICAL policy passed on the new pinned runtime image |
 
-All provider requests used synthetic credentials and local fixtures. The consumer media qualification verifies transport and domain validation with a synthetic PDF payload; it does not claim live-provider extraction quality. Deployment transaction tests inject host command execution; real production systemd/DNS/TLS activation and Termius desktop/mobile acceptance were not run.
+The full pre-push report records the checked source-tree digest, command logs
+and image-scan result. It remains development evidence while changes are
+uncommitted. See [the correction ledger](compliance-resolution-2026-09-19.md)
+for the mapping to the original audit. Earlier broader UI/TUI acceptance is
+historical evidence in [the initial acceptance record](acceptance-v0.0.1-dev.md),
+not a claim that those checks ran again during this correction.
 
 ## Release order and external gates
 
-1. Provision the intended Wyvern release signing identity in the protected Wyvern release environment. Its public key must be reviewed and supplied to Updater as `WYVERN_RELEASE_PUBLIC_KEY` (or `WYVERN_RELEASE_PUBLIC_KEY_FILE` for local packaging). No production signing key was generated by this work.
-2. Qualify/publish compatible Kernel 0.3.0 and Volt 0.2.0 sources with the new publication contract, then Updater 0.6.0 with the Wyvern public trust pin. The version numbers refer to these workspace candidates, not proof that those versions are already published with these patches.
-3. Publish Wyvern from an exact clean source commit and immutable GHCR image. Its workflow downloads/verifies the exact signed Updater 0.6.0 dependency; a missing release or mismatched trust key fails the build.
-4. Update Laboratory's **version and archive SHA-256 pins together** to that qualified Updater release. The existing 0.5.0 pin deliberately remains historical until a real signed 0.6.0 artifact exists; it cannot pass the new Wyvern capability/trust gate. Rebuild both consumer releases with signed Wyvern input; Mastermind's qualification fixture requires its own `wyvern/` manifest and matching test trust.
-5. Record the exact producer commits/digests and current Part 12 evidence. Supply `WYVERN_QUALIFICATION_RUN_ID` and the exact-source qualification artifact described in [releasing](releasing.md); its absence blocks signing. Perform the disposable real-host update/recovery rehearsal and small live-provider acceptance before production rollout. Do not reuse previous source-revision evidence or declare an unsigned local image installable.
+1. Provision the intended Wyvern signing identity in the protected release
+   environment and its reviewed public pin in Updater. No production private
+   signing key was generated by this work.
+2. Publish qualified compatible Kernel 0.3.0, Volt 0.2.0 and Updater 0.6.0
+   artifacts containing these integration changes. Workspace version numbers
+   alone do not establish publication or compatibility of remote assets.
+3. Update Laboratory's Updater **version and archive checksum together** from
+   the resulting real signed artifact. Its historical 0.5.0 pin intentionally
+   remains until that input exists; inventing a checksum would break trust.
+4. Commit the candidate, run the immutable-image candidate workflow, then
+   produce real Part 12 receipts for that exact candidate. Missing compatible
+   dependency, trust pin or evidence stops the release. Follow [releasing](releasing.md).
+5. Perform full target-host install/update/recovery, external DNS/TLS where
+   applicable, and small live-provider acceptance before production rollout.
 
-No commits, pushes, published releases or production installations were performed. Unrelated Mastermind UI/runtime changes present at the start were preserved.
+Local container/systemd rehearsals do not claim production installation.
+Provider calls used synthetic credentials and fixtures; no paid LLM calls were
+made. No commit, push or release publication was performed. Concurrent
+Mastermind work outside the targeted integration was preserved.
 
-See [operations](operations.md), [API](api.md), [reproduction commands](acceptance-v0.0.1-dev.md), and [accepted plan](../wyvern-integration-plan-v0.2.md).
+See [operations](operations.md), [API](api.md), and [accepted decisions](decisions.md).

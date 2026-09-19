@@ -9,6 +9,6 @@ Wyvern — общий LLM gateway хоста Exocortex. Сервисы с LLM-ф
 
 Общие контракты Exocortex определены в [Part 00](https://github.com/psewdon1m-exocortex/general/blob/main/PART_00_SYSTEM_UNIFICATION_SPECIFICATION.md). Реализованный профиль Wyvern описан в Parts 09–10; правила подписи и приёмки релизов сохраняются.
 
-Проверка: `npm ci`, затем `npm run check`. Linux-проверка с Unix sockets: `docker build --target verification -t wyvern-verification:local .`. Это локальный проверочный образ, а не опубликованный релиз.
+Быстрая проверка: `npm ci`, затем `npm run check`. Полный gate перед push на Linux/WSL: `python3 scripts/pre-push.py`; для незакоммиченных изменений — с `--working-tree`. Он проверяет семь областей применимости, закреплённый каталог Part 12, Linux runtime, упаковку, журналы и безопасность исходников/образа. Отчёт сохраняется в `artifacts/pre-push.json`. Это локальная проверка, не разрешение на выпуск.
 
 Подписанный выпуск требует отдельного отчёта для точного коммита: [контракт приёмки и выпуск](docs/releasing.md).

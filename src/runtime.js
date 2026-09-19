@@ -35,8 +35,10 @@ export class Runtime {
   }
   async start() {
     await this.media.load();
+    await this.audit?.prune?.();
     try { await this.reload(); } catch { /* cold start remains live but not ready */ }
     const tick = async () => {
+      try { await this.audit?.prune?.(); } catch { telemetry(this.sink, { event: "audit_unavailable", status: "error", http_status: 503 }); }
       try { await this.reload(); } catch { /* keep last known good */ }
       try { await this.media.reap(id => {
         const adapter = this.#snapshot?.config.adapters[id];
@@ -105,7 +107,9 @@ export class Runtime {
     if (!config.clients[clientId]?.enabled) fault("permission_denied", 403);
     config.clients[clientId].bindings = input.bindings;
     try { validateConfig(config, { allowLoopback: this.kernel.allowLoopback }); } catch { fault("binding_invalid", 422); }
+    await this.audit?.record("bindings_change_requested", { client_id: clientId, request_id: input.request_id, status: "pending" });
     await this.kernel.changeBindings(config.instance_id, clientId, input.bindings, input.expected_revision, input.request_id);
+    await this.recordOutcome("bindings_changed", { client_id: clientId, request_id: input.request_id, status: "success" });
     await this.reload();
     return this.clientStatus(clientId);
   }
@@ -165,6 +169,11 @@ export class Runtime {
   async count(operation) { return this.#driver.count(operation.context); }
   stream(operation) { return this.#driver.stream(operation.context); }
   drain(enabled) { this.draining = enabled; return this.status(); }
+  async recordOutcome(event, metadata) {
+    telemetry(this.sink, { ...metadata, event });
+    try { await this.audit?.record(event, metadata); }
+    catch { telemetry(this.sink, { event: "audit_unavailable", request_id: metadata.request_id, status: "error", http_status: 503 }); }
+  }
   async operatorDrain(enabled) {
     await this.audit?.record("drain_changed", { enabled });
     return this.drain(enabled);

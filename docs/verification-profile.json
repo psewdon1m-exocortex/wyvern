@@ -1,0 +1,13 @@
+{
+  "schema": "exocortex.wyvern.pre-push-profile.v1",
+  "areas": {
+    "backup_restore": {"applicable": true, "scope": "Wyvern media ledger restart/revocation and bootstrap archive safety. Kernel/Volt own authoritative Adapter state; Updater owns encrypted host recovery. Workspace mode additionally exercises Updater recovery. Consumer logical restore is checked separately in each consumer test suite."},
+    "update_rollback": {"applicable": true, "scope": "Signed pinned bootstrap, immutable candidate, prerelease exclusion, installer publication gate and failure-before-promotion regression. Workspace mode also runs the typed Updater rollback/repair tests."},
+    "internal_documentation": {"applicable": false, "reason": "Wyvern has no own web interface or Documentation tab. On 2026-09-19 the owner explicitly excluded Settings/Initialize/update-card UI work; CLI/TUI operations are documented in docs/operations.md."},
+    "technical_documentation": {"applicable": true, "scope": "Current runbooks, recovery and release contracts, local project links and pinned central Part 12 catalog integrity."},
+    "security": {"applicable": true, "scope": "Negative authorization, redaction, bounded logging, source/output/all-layer secret checks, dependency audit and HIGH/CRITICAL image policy."},
+    "public_seo": {"applicable": false, "reason": "The headless gateway has no intentionally indexable HTML pages. Minimal health and authenticated inference/control APIs do not publish discoverable content."},
+    "private_exposure": {"applicable": true, "scope": "Versioned local/optional remote route inventory, Unix socket permissions, admin/data isolation and anonymous minimal health. Actual deployed TLS/external-network checks remain deployment readiness."}
+  },
+  "deferred": ["Consumer Settings layout and web lifecycle cards by explicit owner instruction; no own Wyvern web UI", "Real-host activation, live provider and external ingress acceptance require their actual deployment inputs"]
+}

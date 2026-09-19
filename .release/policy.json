@@ -1,0 +1,7 @@
+{
+  "schema": "exocortex.wyvern.policy.v1",
+  "repository": "https://github.com/psewdon1m-exocortex/general",
+  "revision": "8737b50f0aca4b84f4fa223272bdfb63ade05d33",
+  "catalog": "PART_12_KNOWN_DEPLOYMENT_AND_OPERATIONS_PROBLEMS.md",
+  "sha256": "a66eb1e6942874e506975a7708cec6a0bf6f1fe8969a04c341bcd271d2f1cacd"
+}

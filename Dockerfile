@@ -1,4 +1,4 @@
-FROM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS dependencies
+FROM node:24-alpine3.24@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 AS dependencies
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts --omit=dev --no-audit --no-fund
@@ -10,8 +10,9 @@ COPY tests ./tests
 COPY scripts ./scripts
 RUN npm run check
 
-FROM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS runtime
-RUN groupadd --gid 10001 wyvern && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin wyvern \
+FROM node:24-alpine3.24@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 AS runtime
+RUN rm -rf /usr/local/lib/node_modules /opt/yarn* /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg \
+    && addgroup -g 10001 wyvern && adduser -D -H -u 10001 -G wyvern -s /sbin/nologin wyvern \
     && install -d -o 10001 -g 10001 -m 0750 /run/wyvern /run/wyvern-admin \
     && install -d -o 10001 -g 10001 -m 0700 /var/lib/wyvern
 WORKDIR /app

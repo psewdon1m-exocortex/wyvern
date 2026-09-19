@@ -6,7 +6,7 @@ Wyvern работает как один общий компонент хоста
 
 Подписанные пакеты Mastermind и Laboratory включают подписанный `wyvern-release.json`, его подпись и совместимый пакет Updater. Установка проверяет подписи, устанавливает либо сохраняет более новый Updater, затем устанавливает Wyvern или использует существующий управляемый экземпляр. Версия установленного gateway не меняется неявно при установке потребителя. Повреждённая управляемая установка требует `sudo updater wyvern repair`.
 
-Для самостоятельной установки выпускается `bootstrap.sh` со встроенным публичным ключом релиза. Он проверяет подпись манифеста RSA-PSS-SHA256 и SHA-256 установочного архива до запуска вложенного установщика. Сам bootstrap получают по доверенному каналу. Нужны Linux amd64, Docker, systemd, Python 3, OpenSSL и сеть к Kernel/Google. Updater поставляется в том же подписанном архиве.
+Для самостоятельной установки выпускается `bootstrap.sh` со встроенным публичным ключом релиза. Он проверяет подпись манифеста RSA-PSS-SHA256 и SHA-256 установочного архива до запуска вложенного установщика. Bootstrap и новая установка через Updater также проверяют статус GitHub Release: draft/prerelease не устанавливаются. Нужна доступность GitHub API и опубликованных assets/GHCR; недоступность проверки останавливает новую установку. Повторное подключение через Updater к исправному установленному Wyvern не требует этой проверки. Сам bootstrap получают по доверенному каналу. Нужны Linux amd64, Docker, systemd, Python 3, OpenSSL и сеть к Kernel/Google. Updater поставляется в том же подписанном архиве.
 
 1. Открыть `sudo updater tui`, выбрать Wyvern → Connect Kernel. Ввести HTTPS origin Kernel и его Access Key. Ключ ввода скрыт и не сохраняется. Kernel должен быть соединён с разблокированным Volt.
 2. Создать Google Adapter: устойчивый ID, название, поддерживаемый Google model ID, API key, профиль, capabilities и лимит ответа. Для полного Mastermind нужны text, structured_output, token_count, image, pdf, audio, video, youtube; Laboratory нужны text, structured_output, pdf. Streaming включается отдельно.
@@ -69,6 +69,16 @@ Worker Nginx получает группу сокета (GID 10001); admin socke
 Зашифрованное host recovery включает runtime/manager/client identities и `/var/lib/wyvern`, но не исполняемые файлы, systemd unit, image environment или deployment manifest. На чистом хосте сначала ставят доверенный подписанный пакет, затем восстанавливают соответствующие Kernel, Volt и host archive. Старый архив без Wyvern сохраняет существующие Wyvern roots. Не совпавшая внешняя идентичность приводит к ошибке health verification и откату восстановления.
 
 Медиа ограничены 50 MiB для PDF, 512 MiB для остальных типов; 16 handles на клиента, 256 на runtime, 4 одновременные загрузки. Локальный TTL — час. Ledger сохраняет opaque ID, принадлежность, provider file name и hash поколения credential, но не API key, upload URL или содержимое. Истёкший/чужой/несовместимый handle возвращает 410. Mastermind выполняет до двух повторных загрузок в пределах бюджета задания, Laboratory — собственную политику повтора jobs. Gateway не повторяет inference. Cleanup выполняется после обработки и ограниченными порциями при истечении TTL; окончательное удаление недоступного provider file зависит от политики провайдера.
+
+## Журналы и диагностика
+
+Анонимные `/health/live` и `/health/ready` возвращают только признак состояния; версия доступна через приватный admin API. Отказы аутентификации/авторизации, ошибки запросов и изменения bindings/media фиксируются с request ID без токенов, заголовков и тел запросов. Неизвестные пути не копируются в журнал. Audit ограничен двумя файлами по 512 KiB, 5000 записями на файл и сроком 30 дней; очистка выполняется также при запуске и в idle.
+
+Updater задаёт контейнеру `json-file`, `max-size=10m`, `max-file=3`. Вывод systemd изолирован в `LogNamespace=wyvern`: volatile journal до 16 MiB, файл до 4 MiB, срок до 30 дней, rate limit 200 сообщений за 30 секунд. Настройки других сервисов хоста не меняются. Диагностика: `journalctl --namespace=wyvern -u wyvern.service` и `docker logs exocortex-wyvern`.
+
+## Логическое восстановление потребителей
+
+Backup Mastermind и Laboratory сохраняет только собственное намерение выбора Adapter: instance/client ID, revision и function → adapter/profile. API key, link token и глобальная конфигурация Wyvern в эти архивы не входят. На восстановлении configured intent получает `pending_verification`: inference разрешается только при совпадении с текущими авторитетными bindings, иначе нужно явно выбрать bindings через существующие Settings потребителя. Restore не изменяет shared Wyvern. Legacy-архив без intent сохраняет намерение целевой установки. Если ранее настроенная связь недоступна, новый backup завершается ошибкой вместо потери настроек.
 
 ## Миграция существующих потребителей
 

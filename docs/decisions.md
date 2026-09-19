@@ -12,4 +12,10 @@ The owner accepted the v0.2 plan and authorized development/testing in this conv
 
 The previous no-ACL Kernel behavior remains for unrelated legacy keys during migration. Protected Wyvern keys and aliases are denied to that token as soon as their bindings exist. Installers must provision distinct scoped identities before moving clients; failed authentication is not worked around with a shared provider key.
 
-The intended shared-component update profile and recovery exception still require an implemented, verified typed Updater path. Until then the current head backup/receipt rules are unchanged, and the development image is not a supported production install.
+The typed Updater deployment/update/rollback/repair path is implemented. Its fixed external-state exception is specific to Wyvern: runtime recovery does not roll back global Kernel/Volt. Published, qualified producer releases and an actual host rehearsal remain deployment prerequisites.
+
+On 2026-09-19, after the compliance review, the owner explicitly excluded Settings/Initialize/job-observation/component-update cards and decorative changes from this work because Wyvern is headless. Existing consumer UI is preserved; no Wyvern web UI is introduced. Functional transport, deployment, recovery, security and executable verification remain in scope. This owner instruction supersedes W08 for this implementation increment; it does not authorize expanding consumer privileges.
+
+Consumer logical backups preserve non-secret own-client Adapter/profile/function intent. Restore records it as pending verification, retains target credentials and never writes shared gateway configuration. Inference cannot use a conflicting restored selection; an explicit scoped binding change reconciles it. Laboratory exports backup.v4 and still reads v1–v3; Mastermind stores the additional intent in its existing logical metadata inventory. Old archives retain the target's existing intent.
+
+Container diagnostics use Docker json-file rotation (3 x 10 MiB) and a dedicated volatile systemd journal namespace (16 MiB, 30-day age ceiling). Durable security audit has two 512 KiB files, up to 5000 records each, and 30-day age retention. This intentionally smaller byte budget suits a shared headless gateway; neither prompts nor provider bodies are diagnostic state.

@@ -14,14 +14,17 @@ async function event(res, type, data, signal) {
 }
 export function createServer(runtime, { admin = false } = {}) {
   const server = http.createServer({ maxHeaderSize: 8192, headersTimeout: 10000, requestTimeout: 300000 }, async (req, res) => {
-    let requestId = "req_" + randomUUID(), operation;
+    let requestId = "req_" + randomUUID(), operation, client;
+    const route = ["/health/live", "/health/ready", "/v1/catalog", "/v1/status", "/v1/preflight", "/v1/reload", "/v1/drain",
+      "/v1/client", "/v1/media", "/v1/bindings", "/v1/generate", "/v1/count-tokens"].includes(req.url) ? req.url
+      : /^\/v1\/media\/media_[a-f0-9-]{36}$/.test(req.url) ? "/v1/media/:id" : "unknown";
     const cancelled = new AbortController();
     req.on("aborted", () => cancelled.abort());
     res.on("close", () => { if (!res.writableFinished) cancelled.abort(); });
     try {
-      if (req.url === "/health/live" && req.method === "GET") return json(res, 200, { service: "wyvern", version: "0.0.1", alive: true });
+      if (req.url === "/health/live" && req.method === "GET") return json(res, 200, { alive: true });
       if (req.url === "/health/ready" && req.method === "GET") {
-        const ready = runtime.status().ready; return json(res, ready ? 200 : 503, { service: "wyvern", version: "0.0.1", ready });
+        const ready = runtime.status().ready; return json(res, ready ? 200 : 503, { ready });
       }
       if (admin) {
         if (req.url === "/v1/catalog" && req.method === "GET") return json(res, 200, runtime.catalog());
@@ -35,20 +38,26 @@ export function createServer(runtime, { admin = false } = {}) {
         fault("not_found", 404);
       }
       const authorization = req.headers.authorization;
-      const client = runtime.authenticate(typeof authorization === "string" && authorization.startsWith("Bearer ") ? authorization.slice(7) : "");
+      client = runtime.authenticate(typeof authorization === "string" && authorization.startsWith("Bearer ") ? authorization.slice(7) : "");
       if (req.url === "/v1/client" && req.method === "GET") return json(res, 200, runtime.clientStatus(client));
       if (req.url === "/v1/media" && req.method === "POST") {
         if (req.headers["content-encoding"] || !/^\d+$/.test(req.headers["content-length"] ?? "")) fault("invalid_request");
         const selection = {};
         for (const name of ["function", "adapter_id", "profile"]) { const value = req.headers["x-wyvern-" + name.replace("_", "-")]; if (value !== undefined) selection[name] = value; }
         operation = runtime.prepareMedia(client, selection, cancelled.signal);
+        requestId = operation.request_id;
+        res.setHeader("X-Request-ID", requestId);
         const result = await runtime.uploadMedia(operation, req, req.headers["content-type"], Number(req.headers["content-length"]));
+        await runtime.recordOutcome("media_uploaded", { client_id: client, request_id: operation.request_id, status: "success" });
         operation.release("success"); return json(res, 201, result);
       }
       if (/^\/v1\/media\/media_[a-f0-9-]{36}$/.test(req.url) && ["GET", "DELETE"].includes(req.method)) {
         const id = req.url.split("/").at(-1);
         operation = runtime.prepareMedia(client, runtime.mediaSelection(client, id), cancelled.signal);
+        requestId = operation.request_id;
+        res.setHeader("X-Request-ID", requestId);
         const result = await runtime.inspectMedia(operation, id, req.method === "DELETE");
+        if (req.method === "DELETE") await runtime.recordOutcome("media_deleted", { client_id: client, request_id: operation.request_id, status: "success" });
         operation.release("success"); return json(res, 200, result);
       }
       if (req.url === "/v1/bindings" && req.method === "POST") {
@@ -90,6 +99,8 @@ export function createServer(runtime, { admin = false } = {}) {
     } catch (error) {
       const safe = publicError(error, requestId);
       operation?.release(cancelled.signal.aborted ? "cancelled" : safe.body.error.code);
+      await runtime.recordOutcome(safe.status === 401 ? "authentication_failed" : safe.status === 403 ? "authorization_failed" : "request_failed",
+        { request_id: requestId, client_id: client ?? null, route, status: safe.body.error.code, http_status: safe.status });
       if (res.destroyed) return;
       if (res.headersSent) {
         res.end(`event: request.failed\ndata: ${JSON.stringify(safe.body)}\n\n`);

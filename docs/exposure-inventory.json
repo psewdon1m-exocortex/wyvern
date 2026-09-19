@@ -1,0 +1,23 @@
+{
+  "schema": "exocortex.wyvern.exposure.v1",
+  "listeners": [
+    {"id": "client", "transport": "unix", "path": "/run/wyvern/client.sock", "exposure": "private", "authority": "directory/socket permissions and per-client Bearer identity"},
+    {"id": "admin", "transport": "unix", "path": "/run/wyvern-admin/admin.sock", "exposure": "private", "authority": "root/Updater filesystem boundary; never mounted in consumers"},
+    {"id": "remote", "transport": "https", "conditional": true, "exposure": "public-authenticated-non-indexable", "authority": "server-managed TLS ingress to client socket only; Bearer required except minimal health"}
+  ],
+  "routes": [
+    {"path": "/health/live", "methods": ["GET"], "boundary": "both", "auth": "minimal-health"},
+    {"path": "/health/ready", "methods": ["GET"], "boundary": "both", "auth": "minimal-health"},
+    {"path": "/v1/client", "methods": ["GET"], "boundary": "client", "auth": "bearer"},
+    {"path": "/v1/generate", "methods": ["POST"], "boundary": "client", "auth": "bearer"},
+    {"path": "/v1/count-tokens", "methods": ["POST"], "boundary": "client", "auth": "bearer"},
+    {"path": "/v1/media", "methods": ["POST"], "boundary": "client", "auth": "bearer"},
+    {"path": "/v1/media/:id", "methods": ["GET", "DELETE"], "boundary": "client", "auth": "bearer"},
+    {"path": "/v1/bindings", "methods": ["POST"], "boundary": "client", "auth": "bearer"},
+    {"path": "/v1/catalog", "methods": ["GET"], "boundary": "admin", "auth": "filesystem"},
+    {"path": "/v1/status", "methods": ["GET"], "boundary": "admin", "auth": "filesystem"},
+    {"path": "/v1/preflight", "methods": ["GET"], "boundary": "admin", "auth": "filesystem"},
+    {"path": "/v1/reload", "methods": ["POST"], "boundary": "admin", "auth": "filesystem"},
+    {"path": "/v1/drain", "methods": ["POST"], "boundary": "admin", "auth": "filesystem"}
+  ]
+}

@@ -20,7 +20,9 @@ async function mediaFixture(t, options = {}) {
   } });
   f.upload = async () => {
     const response = await fetch(f.origin + "/v1/media", { method: "POST", headers: { Authorization: "Bearer " + CLIENT_TOKEN, "Content-Type": "application/pdf", "X-Wyvern-Function": "crusher" }, body: "%PDF-fixture" });
-    assert.equal(response.status, 201); return response.json();
+    assert.equal(response.status, 201);
+    assert.equal(response.headers.get("x-request-id"), f.events.findLast(row => row.event === "media_uploaded").request_id);
+    return response.json();
   };
   f.mediaCall = (id, method = "GET", token = CLIENT_TOKEN) => fetch(f.origin + "/v1/media/" + id, { method, headers: { Authorization: "Bearer " + token } });
   return f;
@@ -48,7 +50,11 @@ test("media survives restart without credentials; pinned generation prevents del
   const recovered = new Media({ filename }); await recovered.load(); f.runtime.media = recovered;
   const input = message({ messages: [{ role: "user", content: [{ type: "media", media_id: handle.media_id }] }] });
   const operation = f.runtime.prepare("mastermind", input);
-  assert.equal((await f.mediaCall(handle.media_id, "DELETE")).status, 409);
+  const denied = await f.mediaCall(handle.media_id, "DELETE");
+  assert.equal(denied.status, 409);
+  const errorId = (await denied.json()).error.request_id;
+  assert.equal(denied.headers.get("x-request-id"), errorId);
+  assert.equal(f.events.findLast(row => row.event === "request_failed").request_id, errorId);
   operation.release("success");
   f.state.key = "rotated-key"; f.state.keyRevision++; await f.runtime.reload();
   assert.equal((await f.call(input)).response.status, 410);
