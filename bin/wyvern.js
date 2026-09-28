@@ -76,7 +76,7 @@ export async function main(args) {
   const [command, subcommand, ...remaining] = args;
   if (remaining.length || args.some(item => item.startsWith("--"))) throw new Error("invalid_arguments");
   let result;
-  if (command === "version" && !subcommand) result = { schema: "exocortex.wyvern.version.v1", service: "wyvern", version: "0.0.1", api_version: 1 };
+  if (command === "version" && !subcommand) result = { schema: "exocortex.wyvern.version.v1", service: "wyvern", version: "0.0.2", api_version: 1 };
   else if (command === "serve" && !subcommand) return serve();
   else if (command === "config" && subcommand === "validate") {
     const input = await readBody(process.stdin, 262144);

@@ -31,7 +31,7 @@ test("health is minimal before authentication while admin diagnostics retain ver
   const f = await fixture(t);
   assert.deepEqual(await fetch(f.origin + "/health/live").then(r => r.json()), { alive: true });
   assert.deepEqual(await fetch(f.origin + "/health/ready").then(r => r.json()), { ready: true });
-  assert.equal((await fetch(f.adminOrigin + "/v1/status").then(r => r.json())).version, "0.0.1");
+  assert.equal((await fetch(f.adminOrigin + "/v1/status").then(r => r.json())).version, "0.0.2");
 });
 
 test("central redactor bounds nested/cyclic metadata and removes keys and credential patterns", () => {

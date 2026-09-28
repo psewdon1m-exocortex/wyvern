@@ -105,7 +105,7 @@ and `log_sha256`. All paths are bounded ordinary files within the evidence
 bundle. Never manufacture a receipt for an unperformed check.
 
 ```sh
-python3 scripts/verify-qualification.py --assets /path/to/candidate --bundle /path/to/evidence --revision FULL_SHA --tag wyvern-v0.0.1
+python3 scripts/verify-qualification.py --assets /path/to/candidate --bundle /path/to/evidence --revision FULL_SHA --tag wyvern-v0.0.2
 ```
 
 Actual DNS/TLS, real host installation/recovery, operator enrollment, provider
