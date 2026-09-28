@@ -1,0 +1,95 @@
+name: Wyvern candidate qualification
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_run_id:
+        description: Successful immutable candidate workflow run ID
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+  packages: read
+concurrency:
+  group: wyvern-qualification-${{ github.sha }}
+  cancel-in-progress: false
+jobs:
+  qualify:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          path: workspace/wyvern
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: psewdon1m-exocortex/kernel
+          path: workspace/kernel
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: psewdon1m-exocortex/volt
+          path: workspace/volt
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: psewdon1m-exocortex/mastermind
+          path: workspace/mastermind
+          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: psewdon1m-exocortex/laboratory
+          path: workspace/laboratory
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24.21.0'
+          cache: npm
+          cache-dependency-path: |
+            workspace/wyvern/package-lock.json
+            workspace/kernel/package-lock.json
+            workspace/volt/package-lock.json
+            workspace/laboratory/services/api/package-lock.json
+      - name: Install exact source dependencies
+        run: |
+          npm ci --ignore-scripts --prefix workspace/wyvern
+          npm ci --ignore-scripts --prefix workspace/kernel
+          npm ci --ignore-scripts --prefix workspace/volt
+          npm ci --ignore-scripts --prefix workspace/laboratory/services/api
+          python3 -m venv workspace/.qualification-venv
+          workspace/.qualification-venv/bin/pip install --disable-pip-version-check ./workspace/mastermind
+      - name: Require the exact successful candidate producer
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+        working-directory: workspace/wyvern
+        run: python3 scripts/verify-run.py candidate "$CANDIDATE_RUN_ID"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: wyvern-candidate-${{ github.sha }}
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+          path: qualified/assets
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Qualify exact candidate behavior and integrations
+        working-directory: workspace/wyvern
+        run: |
+          version="$(node -p 'require("./package.json").version')"
+          python3 scripts/qualify-candidate.py \
+            --assets "$GITHUB_WORKSPACE/qualified/assets" \
+            --bundle "$GITHUB_WORKSPACE/qualified/evidence" \
+            --workspace "$GITHUB_WORKSPACE/workspace" \
+            --python "$GITHUB_WORKSPACE/workspace/.qualification-venv/bin/python" \
+            --revision "$GITHUB_SHA" \
+            --tag "wyvern-v${version}"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: wyvern-qualification-${{ github.sha }}
+          path: qualified/evidence/
+          if-no-files-found: error
+          retention-days: 90

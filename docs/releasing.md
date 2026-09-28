@@ -41,12 +41,16 @@ also exercises the local Kernel/Volt chain and Updater component/recovery tests;
    unsigned installer/bootstrap and creates GitHub provenance/SBOM attestations.
    It retains `wyvern-candidate-<SHA>` and its check logs. An image in GHCR alone
    is not an installable Wyvern release.
-3. Evaluate every active Part 12 ID against this exact candidate. The separate
-   acceptance process retains the real command receipts and logs in
-   `wyvern-qualification-<SHA>` in a successful same-repository workflow run.
-   Set `WYVERN_CANDIDATE_RUN_ID` and `WYVERN_QUALIFICATION_RUN_ID` to those exact
-   successful producer runs. Missing evidence remains a blocker; unit-test
-   fixture reports are not accepted as real release qualification.
+3. Dispatch `.github/workflows/qualification.yml` with the successful candidate
+   run ID. It evaluates every active Part 12 ID against those exact candidate
+   bytes, reruns source/package/security checks, pulls and scans the immutable
+   image, and exercises the real Kernel/Volt and Mastermind/Laboratory clients
+   with synthetic credentials/provider responses. It retains command receipts
+   and logs in `wyvern-qualification-<SHA>` without claiming real-host, public
+   ingress or live-provider readiness. Set `WYVERN_CANDIDATE_RUN_ID` and
+   `WYVERN_QUALIFICATION_RUN_ID` to those exact successful producer runs.
+   Missing evidence remains a blocker; unit-test fixture reports are not
+   accepted as real release qualification.
 4. Push `wyvern-v<package version>` pointing to that same current `main` commit.
    The release workflow validates producer identity, source, reviewed policy,
    every candidate file digest and every qualification receipt. It verifies
