@@ -25,8 +25,6 @@ NOT_APPLICABLE = {
     "BST-13": ("Wyvern does not accept or generate an operator login Access Key, so login-key character and strength restrictions are outside this release profile.", ["docs/operations.md", "docs/decisions.md"]),
     "TRUST-01": ("Wyvern does not implement SSH or SFTP transport, so no release-signing identity can be reused as an SSH or SFTP credential.", ["docs/exposure-inventory.json", "src/server.js"]),
     "TRUST-02": ("Wyvern has no SSH or SFTP client and therefore has no trust-on-first-use host-key path in the release artifact.", ["docs/exposure-inventory.json", "package.json"]),
-    "PERM-10": ("This catalog item is specific to Saturn deployment writes under /opt/vault; Wyvern owns neither that head nor that filesystem path.", ["docs/operations.md", "compose.yaml"]),
-    "PERM-11": ("This catalog item is specific to Kernel deployment rollback paths; Wyvern is a shared helper with a separate typed lifecycle.", ["docs/operations.md", "compose.yaml"]),
     "CTR-01": ("The default Wyvern release exposes Unix sockets and publishes no host TCP port; optional remote ingress is operator-owned outside this artifact.", ["docs/exposure-inventory.json", "compose.yaml"]),
     "CTR-05": ("Wyvern has one runtime container and no Compose health dependency or startup-order graph to coordinate inside this release.", ["compose.yaml", "Dockerfile"]),
     "CTR-06": ("The default release has no published host port or service-owned reverse proxy; its socket health is exercised directly by the runtime smoke.", ["docs/exposure-inventory.json", "compose.yaml"]),
