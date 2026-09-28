@@ -62,7 +62,7 @@ jobs:
           assets="$RUNNER_TEMP/qualified/assets"
           image="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["image"])' "$assets/candidate.json")"
           gh attestation verify "oci://$image" --bundle "$assets/image-provenance.json" --repo "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/candidate.yml" --source-digest "$GITHUB_SHA" --deny-self-hosted-runners
-          gh attestation verify "oci://$image" --bundle "$assets/image-sbom-attestation.json" --repo "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/candidate.yml" --source-digest "$GITHUB_SHA" --predicate-type https://spdx.dev/Document --deny-self-hosted-runners
+          gh attestation verify "oci://$image" --bundle "$assets/image-sbom-attestation.json" --repo "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/candidate.yml" --source-digest "$GITHUB_SHA" --predicate-type https://spdx.dev/Document/v2.3 --deny-self-hosted-runners
           docker pull "$image"
           node scripts/smoke-container.mjs "$image"
           docker save "$image" -o "$RUNNER_TEMP/image.tar"

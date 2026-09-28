@@ -1,4 +1,4 @@
-Wyvern 0.0.2 introduces a shared Adapter-based LLM gateway for Exocortex.
+Wyvern 0.0.3 introduces a shared Adapter-based LLM gateway for Exocortex.
 
 Google generation, JSON Schema responses, token counting, streaming and media use scoped client identities. Provider keys live in Volt and are resolved through instance-scoped Kernel grants. Mastermind and Laboratory choose function bindings in their own Settings; the root-only Updater TUI manages Adapters, credentials, grants and runtime lifecycle.
 

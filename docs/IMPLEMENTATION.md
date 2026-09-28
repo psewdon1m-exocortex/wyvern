@@ -1,6 +1,6 @@
 # Implementation and verification — 2026-09-19
 
-Wyvern 0.0.2 is a **release candidate**. Runtime, integrations and release
+Wyvern 0.0.3 is a **release candidate**. Runtime, integrations and release
 tooling are implemented; production deployment still requires the external
 inputs below. The owner excluded Wyvern web lifecycle
 cards and decorative changes: this component has no own web interface.

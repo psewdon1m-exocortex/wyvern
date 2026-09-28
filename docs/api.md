@@ -1,6 +1,6 @@
 # Runtime API v1
 
-This is the development contract implemented by 0.0.2. Default transport is a local Unix socket; no domain or public listener is required. An HTTPS ingress may be added through the host Nginx when an explicitly configured remote consumer needs it.
+This is the development contract implemented by 0.0.3. Default transport is a local Unix socket; no domain or public listener is required. An HTTPS ingress may be added through the host Nginx when an explicitly configured remote consumer needs it.
 
 Data socket: `/run/wyvern/client.sock`. Every client API request uses its own `Authorization: Bearer` credential. Identity is never accepted from request metadata.
 
