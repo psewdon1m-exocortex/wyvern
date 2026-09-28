@@ -25,9 +25,9 @@ NOT_APPLICABLE = {
     "BST-13": ("Wyvern does not accept or generate an operator login Access Key, so login-key character and strength restrictions are outside this release profile.", ["docs/operations.md", "docs/decisions.md"]),
     "TRUST-01": ("Wyvern does not implement SSH or SFTP transport, so no release-signing identity can be reused as an SSH or SFTP credential.", ["docs/exposure-inventory.json", "src/server.js"]),
     "TRUST-02": ("Wyvern has no SSH or SFTP client and therefore has no trust-on-first-use host-key path in the release artifact.", ["docs/exposure-inventory.json", "package.json"]),
-    "CTR-01": ("The default Wyvern release exposes Unix sockets and publishes no host TCP port; optional remote ingress is operator-owned outside this artifact.", ["docs/exposure-inventory.json", "compose.yaml"]),
-    "CTR-05": ("Wyvern has one runtime container and no Compose health dependency or startup-order graph to coordinate inside this release.", ["compose.yaml", "Dockerfile"]),
-    "CTR-06": ("The default release has no published host port or service-owned reverse proxy; its socket health is exercised directly by the runtime smoke.", ["docs/exposure-inventory.json", "compose.yaml"]),
+    "CTR-01": ("The default Wyvern release exposes Unix sockets and publishes no host TCP port; optional remote ingress is operator-owned outside this artifact.", ["docs/exposure-inventory.json", "Dockerfile"]),
+    "CTR-05": ("Wyvern has one runtime container and no Compose health dependency or startup-order graph to coordinate inside this release.", ["Dockerfile", "docs/operations.md"]),
+    "CTR-06": ("The default release has no published host port or service-owned reverse proxy; its socket health is exercised directly by the runtime smoke.", ["docs/exposure-inventory.json", "Dockerfile"]),
     "HLT-03": ("Wyvern ships no remote monitor configuration; optional remote consumers use the documented authenticated API rather than a bundled monitor.", ["docs/exposure-inventory.json", "docs/operations.md"]),
     "HLT-04": ("Wyvern has no dashboard metric that converts an absent measurement into zero; diagnostics expose explicit nullable state instead.", ["src/runtime.js", "docs/api.md"]),
     "HLT-05": ("Wyvern does not publish an uptime metric or substitute host, proxy, database, or Updater uptime in its status contract.", ["src/runtime.js", "docs/api.md"]),
@@ -55,7 +55,7 @@ NOT_APPLICABLE = {
 for identifier in [f"NET-{number:02d}" for number in range(1, 13)]:
     NOT_APPLICABLE[identifier] = (
         "The default Wyvern release is Unix-socket-only and owns no public domain, TLS certificate, firewall, Nginx vhost, proxy buffering, or static web route; optional ingress is a separate deployment-readiness check.",
-        ["docs/exposure-inventory.json", "docs/operations.md", "compose.yaml"],
+        ["docs/exposure-inventory.json", "docs/operations.md", "Dockerfile"],
     )
 
 
