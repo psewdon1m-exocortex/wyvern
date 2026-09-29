@@ -5,6 +5,7 @@ import { LIMITS, validateConfig } from "./config.js";
 import { validateRequest } from "./request.js";
 import { GoogleDriver } from "./drivers/google.js";
 import { Media } from "./media.js";
+import { VERSION } from "./version.js";
 
 export class Runtime {
   #snapshot = null;
@@ -51,7 +52,7 @@ export class Runtime {
   authFresh() { return this.#snapshot !== null && this.clock() - this.lastSuccess <= this.limits.max_auth_stale_ms; }
   status() {
     const ready = this.authFresh() && !this.draining;
-    return { schema: "exocortex.wyvern.status.v1", service: "wyvern", version: "0.0.3", api_version: 1,
+    return { schema: "exocortex.wyvern.status.v1", service: "wyvern", version: VERSION, api_version: 1,
       instance_id: this.#snapshot?.config.instance_id ?? null, installed: true, configuration_loaded: this.#snapshot !== null,
       ready, state: !this.#snapshot ? "unconfigured" : this.draining ? "draining" : this.lastError || !this.authFresh() ? "degraded" : "ready",
       generation: this.#snapshot?.generation ?? null, register_revision: this.#snapshot?.register_revision ?? null,

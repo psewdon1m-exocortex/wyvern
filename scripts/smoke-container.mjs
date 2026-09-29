@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { VERSION } from "../src/version.js";
 
 const image = process.argv[2];
 if (!image || image.startsWith("-") || !/^[a-zA-Z0-9_./:@-]+$/.test(image)) throw new Error("Pass the exact local image reference");
@@ -9,6 +10,8 @@ const name = "wyvern-smoke-" + randomUUID(), logsName = name + "-logs";
 const docker = (...args) => execFileSync("docker", args, { encoding: "utf8", timeout: 30000, stdio: ["ignore", "pipe", "pipe"] });
 let started = false, logsStarted = false;
 try {
+  const identity = JSON.parse(docker("run", "--rm", "--network", "none", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true", image, "version", "--json"));
+  assert.equal(identity.service, "wyvern"); assert.equal(identity.api_version, 1); assert.equal(identity.version, VERSION);
   docker("run", "--detach", "--rm", "--name", name, "--read-only", "--network", "none", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
     "--log-driver", "json-file", "--log-opt", "max-size=10m", "--log-opt", "max-file=3",
     "--pids-limit", "64", "--memory", "128m",
@@ -21,7 +24,7 @@ try {
     try { status = JSON.parse(docker("exec", name, "node", "/app/bin/wyvern.js", "status", "--json")); break; }
     catch { await new Promise(resolve => setTimeout(resolve, 100)); }
   }
-  assert.equal(status?.service, "wyvern"); assert.equal(status.state, "unconfigured"); assert.equal(status.ready, false);
+  assert.equal(status?.service, "wyvern"); assert.equal(status.version, VERSION); assert.equal(status.state, "unconfigured"); assert.equal(status.ready, false);
   assert.equal(docker("exec", name, "node", "-e", "process.stdout.write(String(process.getuid()))"), "10001");
   const script = "import {localRequest} from '/app/src/local-client.js'; const live=await localRequest('/run/wyvern/client.sock','GET','/health/live'); if(!live.alive)throw Error('not-live'); try{await localRequest('/run/wyvern/client.sock','POST','/v1/drain',{enabled:true});throw Error('admin-exposed')}catch(e){if(e.message==='admin-exposed')throw e} const status=await localRequest('/run/wyvern-admin/admin.sock','POST','/v1/drain',{enabled:true}); if(!status.drain)throw Error('drain-not-applied');";
   docker("exec", name, "node", "--input-type=module", "-e", script);

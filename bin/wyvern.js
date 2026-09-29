@@ -13,6 +13,7 @@ import { fields, readBody } from "../src/util.js";
 import { publicError } from "../src/errors.js";
 import { Audit } from "../src/audit.js";
 import { Media } from "../src/media.js";
+import { VERSION } from "../src/version.js";
 
 export async function listenLocal(runtime, clientSocket, adminSocket) {
   if (!path.isAbsolute(clientSocket) || !path.isAbsolute(adminSocket) || path.dirname(clientSocket) === path.dirname(adminSocket)) throw new Error("invalid_socket_boundary");
@@ -76,7 +77,7 @@ export async function main(args) {
   const [command, subcommand, ...remaining] = args;
   if (remaining.length || args.some(item => item.startsWith("--"))) throw new Error("invalid_arguments");
   let result;
-  if (command === "version" && !subcommand) result = { schema: "exocortex.wyvern.version.v1", service: "wyvern", version: "0.0.3", api_version: 1 };
+  if (command === "version" && !subcommand) result = { schema: "exocortex.wyvern.version.v1", service: "wyvern", version: VERSION, api_version: 1 };
   else if (command === "serve" && !subcommand) return serve();
   else if (command === "config" && subcommand === "validate") {
     const input = await readBody(process.stdin, 262144);

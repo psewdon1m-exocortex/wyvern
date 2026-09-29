@@ -6,6 +6,7 @@ import test from "node:test";
 import { Audit } from "../src/audit.js";
 import { redact, logEvent } from "../src/observability.js";
 import { fixture, message, OTHER_TOKEN } from "./helpers.js";
+import { VERSION } from "../src/version.js";
 
 test("early HTTP denials and provider errors are correlated, audited and never log caller data", async t => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "wyvern-security-"));
@@ -31,7 +32,7 @@ test("health is minimal before authentication while admin diagnostics retain ver
   const f = await fixture(t);
   assert.deepEqual(await fetch(f.origin + "/health/live").then(r => r.json()), { alive: true });
   assert.deepEqual(await fetch(f.origin + "/health/ready").then(r => r.json()), { ready: true });
-  assert.equal((await fetch(f.adminOrigin + "/v1/status").then(r => r.json())).version, "0.0.3");
+  assert.equal((await fetch(f.adminOrigin + "/v1/status").then(r => r.json())).version, VERSION);
 });
 
 test("central redactor bounds nested/cyclic metadata and removes keys and credential patterns", () => {

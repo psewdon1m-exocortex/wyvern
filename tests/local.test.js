@@ -10,10 +10,11 @@ import { localRequest } from "../src/local-client.js";
 import { Runtime } from "../src/runtime.js";
 import { secretFile, listenLocal } from "../bin/wyvern.js";
 import { Audit } from "../src/audit.js";
+import { VERSION } from "../src/version.js";
 
 test("CLI emits a versioned JSON result and never echoes an unknown secret argument", () => {
   const version = spawnSync(process.execPath, ["bin/wyvern.js", "version", "--json"], { encoding: "utf8" });
-  assert.equal(version.status, 0); assert.equal(JSON.parse(version.stdout).version, "0.0.3");
+  assert.equal(version.status, 0); assert.equal(JSON.parse(version.stdout).version, VERSION);
   const wrong = spawnSync(process.execPath, ["bin/wyvern.js", "--api-key=do-not-echo"], { encoding: "utf8" });
   assert.equal(wrong.status, 1); assert.doesNotMatch(wrong.stderr + wrong.stdout, /do-not-echo/);
 });
