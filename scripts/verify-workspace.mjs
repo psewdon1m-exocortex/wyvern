@@ -38,9 +38,9 @@ try {
   const voltApp = createVoltApp({ store: vault, sessionKey: randomBytes(32), accessKey: "synthetic-owner", kernelToken: brokerToken });
   const voltServer = http.createServer(voltApp); servers.push(voltServer);
   const voltOrigin = await listen(voltServer);
-  const legacy = "legacy-" + randomBytes(24).toString("hex"), scoped = "scoped-" + randomBytes(24).toString("hex");
+  const legacy = "legacy-" + randomBytes(24).toString("hex"), scoped = "scoped-" + randomBytes(24).toString("hex"), enroller = "updater-" + randomBytes(24).toString("hex");
   kernelApp = createKernelApp({ dataDir: path.join(directory, "kernel"), defaultsDir: path.join(workspace, "kernel/data/defaults"), distDir: path.join(directory, "missing"),
-    accessKey: "synthetic-owner", sessionSecret: "s".repeat(40), apiToken: legacy, diskPath: directory,
+    accessKey: "synthetic-owner", sessionSecret: "s".repeat(40), apiToken: legacy, updaterMachineToken: enroller, updaterHostID: "managed", diskPath: directory,
     // Use the real Volt HTTP client without requiring service-discovery seed data.
     voltClient: (await load("kernel/server/volt-client.js")).createVoltClient({ baseUrl: voltOrigin, token: brokerToken }),
     serviceStatusFetch: async () => { throw new Error("isolated fixture"); } });
@@ -49,7 +49,7 @@ try {
     { key: "wyvern.config.active", value: `volt://${bundle.id}/1`, description: "config" },
     { key: "wyvern.credentials.google", value: `volt://${secret.id}/1`, description: "credential" },
   ], "fixture", { replace: true });
-  store.setSetting("machine_principals_v1", JSON.stringify([{ id: "wyvern", token_sha256: createHash("sha256").update(scoped).digest("hex"),
+  store.setSetting("machine_principals_v1", JSON.stringify([...JSON.parse(store.getSetting("machine_principals_v1")), { id: "wyvern", token_sha256: createHash("sha256").update(scoped).digest("hex"),
     allowed_keys: ["wyvern.config.active", "wyvern.credentials.google"], enabled: true }]));
   const kernelServer = http.createServer(kernelApp); servers.push(kernelServer);
   const kernelOrigin = await listen(kernelServer);
@@ -73,12 +73,11 @@ try {
     const response = await fetch(kernelOrigin + route, { method, headers: { "Content-Type": "application/json", ...headers }, ...(input === undefined ? {} : { body: JSON.stringify(input) }) });
     return { status: response.status, body: await response.json(), headers: response.headers };
   };
-  const login = await request("/api/auth/login", { access_key: "synthetic-owner" });
-  assert.equal(login.status, 200);
   const managerToken = "manager-" + randomBytes(24).toString("hex"), runtimeToken = "runtime-" + randomBytes(24).toString("hex");
   const enrollment = await request("/api/wyvern/instances/managed/enroll", {
+    host_id: "managed",
     manager_token_sha256: createHash("sha256").update(managerToken).digest("hex"), runtime_token_sha256: createHash("sha256").update(runtimeToken).digest("hex"),
-  }, { Cookie: login.headers.getSetCookie()[0].split(";")[0] });
+  }, { Authorization: "Bearer " + enroller });
   assert.equal(enrollment.status, 200, JSON.stringify(enrollment.body));
   const manager = { Authorization: "Bearer " + managerToken }, reader = { Authorization: "Bearer " + runtimeToken };
   const route = "/api/v1/wyvern/managed/mutations";

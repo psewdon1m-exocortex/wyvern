@@ -45,6 +45,9 @@ def build(args):
     capabilities = json.loads(subprocess.check_output([str(args.updater_bundle/'updater-linux-amd64'), 'wyvern', 'capabilities']))
     if capabilities != {'schema': 'exocortex.wyvern.updater.v1', 'api_version': 1}:
         raise ValueError('Updater does not implement Wyvern v1')
+    host_capabilities = json.loads(subprocess.check_output([str(args.updater_bundle/'updater-linux-amd64'), 'host', 'capabilities']))
+    if host_capabilities.get('schema') != 'exocortex.updater.host-dependencies.v1' or host_capabilities.get('api_version') != 1:
+        raise ValueError('Updater does not implement host dependencies v1')
     args.output.mkdir(parents=True, exist_ok=True)
     bundle = args.output/'wyvern-install.tar.gz'
     with bundle.open('wb') as raw, gzip.GzipFile(filename='', mode='wb', fileobj=raw, mtime=0) as zipped, tarfile.open(fileobj=zipped, mode='w|') as archive:

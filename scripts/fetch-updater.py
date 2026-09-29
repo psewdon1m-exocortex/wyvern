@@ -52,6 +52,8 @@ def main():
         if hashlib.sha256(binary.read_bytes()).hexdigest()!=manifest.get('binary',{}).get('sha256'):raise ValueError('Updater binary checksum mismatch')
         if subprocess.check_output([str(binary),'version'],text=True).strip()!=version:raise ValueError('Updater executable version mismatch')
         if json.loads(subprocess.check_output([str(binary),'wyvern','capabilities']))!={'schema':'exocortex.wyvern.updater.v1','api_version':1}:raise ValueError('Updater lacks Wyvern v1')
+        host_capabilities=json.loads(subprocess.check_output([str(binary),'host','capabilities']))
+        if host_capabilities.get('schema')!='exocortex.updater.host-dependencies.v1' or host_capabilities.get('api_version')!=1:raise ValueError('Updater lacks host dependencies v1')
         import shutil
         shutil.copytree(stage,args.output)
 
