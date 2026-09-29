@@ -28,7 +28,14 @@ class BootstrapTests(unittest.TestCase):
             for scope in ['updater','neptune','gryphon','wyvern']:(helper/'release-trust'/f'{scope}.pem').write_text('synthetic already-qualified public trust\n')
             (helper/'install.sh').write_text('#!/bin/sh\nexit 0\n')
             (helper/'systemd/updater.service').write_text('[Service]\nExecStart=/usr/bin/updater\n')
-            (helper/'updater-linux-amd64').write_text("#!/bin/sh\necho '{\"schema\":\"exocortex.wyvern.updater.v1\",\"api_version\":1}'\n")
+            (helper/'updater-linux-amd64').write_text(
+                '#!/bin/sh\n'
+                'if [ "$1" = host ]; then\n'
+                '  echo \'{"schema":"exocortex.updater.host-dependencies.v1","api_version":1}\'\n'
+                'else\n'
+                '  echo \'{"schema":"exocortex.wyvern.updater.v1","api_version":1}\'\n'
+                'fi\n'
+            )
             (helper/'updater-linux-amd64').chmod(0o755)
             builder.ROOT=source
             args=SimpleNamespace(source_sha=sha,image='ghcr.io/test/wyvern@sha256:'+'a'*64,repository='test/wyvern',output=root/'out',updater_bundle=helper,public_key=helper/'release-trust/wyvern.pem')
