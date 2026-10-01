@@ -1,6 +1,6 @@
 # Implementation and verification — 2026-09-19
 
-Wyvern 0.0.5 includes the runtime, integrations and release tooling described
+Wyvern 0.0.6 includes the runtime, integrations and release tooling described
 here; production deployment still requires the external
 inputs below. The owner excluded Wyvern web lifecycle
 cards and decorative changes: this component has no own web interface.
